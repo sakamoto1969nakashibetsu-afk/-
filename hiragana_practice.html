@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#ffffff">
+<title>ひらがな1文字れんしゅう</title>
+<style>
+  :root{
+    --bg:#f7f7f5; --card:#fff; --text:#111; --sub:#666; --line:#ddd;
+    --btn:#111; --btnText:#fff;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;
+    background:var(--bg); color:var(--text);
+    min-height:100vh; display:flex; justify-content:center;
+  }
+  .app{width:min(900px,100%); padding:18px}
+  h1{font-size:24px; margin:4px 0 14px}
+  .card{
+    background:var(--card); border-radius:20px; padding:18px;
+    box-shadow:0 2px 12px rgba(0,0,0,.06);
+  }
+  .display{
+    min-height:52vh; display:flex; align-items:center; justify-content:center;
+    font-size:clamp(150px,42vw,360px); font-weight:700; line-height:1;
+    user-select:none;
+  }
+  .status{text-align:center; color:var(--sub); font-size:15px; margin-top:-2px; min-height:22px}
+  .controls{display:grid; gap:12px; margin-top:14px}
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+  button, select, input{
+    font:inherit; font-size:18px; border-radius:14px; border:1px solid var(--line);
+    padding:12px 14px; background:#fff;
+  }
+  button.primary{background:var(--btn); color:var(--btnText); border-color:var(--btn)}
+  button{cursor:pointer}
+  label{font-size:16px; color:#333}
+  .grow{flex:1}
+  .small{font-size:14px; color:var(--sub); line-height:1.5; margin-top:10px}
+  .toggle{display:flex; align-items:center; gap:7px}
+  input[type="number"]{width:90px}
+  @media (max-width:600px){
+    .app{padding:10px}
+    .card{padding:12px}
+    h1{font-size:20px}
+    button, select, input{font-size:16px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>ひらがな1文字れんしゅう</h1>
+
+  <div class="card">
+    <div id="char" class="display">あ</div>
+    <div id="status" class="status">「スタート」を押してください</div>
+
+    <div class="controls">
+      <div class="row">
+        <button id="start" class="primary grow">スタート</button>
+        <button id="stop" class="grow">ストップ</button>
+      </div>
+
+      <div class="row">
+        <button id="next" class="grow">次の文字</button>
+        <button id="speak" class="grow">もう一度読む</button>
+      </div>
+
+      <div class="row">
+        <label>表示順
+          <select id="mode">
+            <option value="random" selected>ランダム</option>
+            <option value="order">あいうえお順</option>
+          </select>
+        </label>
+
+        <label>読み上げまで
+          <select id="delay">
+            <option value="1000">1秒</option>
+            <option value="2000" selected>2秒</option>
+            <option value="3000">3秒</option>
+            <option value="4000">4秒</option>
+            <option value="5000">5秒</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="row">
+        <label class="toggle">
+          <input type="checkbox" id="auto" checked>
+          読み上げ後、自動で次へ
+        </label>
+        <label>次の文字まで
+          <select id="gap">
+            <option value="1000" selected>1秒</option>
+            <option value="1500">1.5秒</option>
+            <option value="2000">2秒</option>
+            <option value="3000">3秒</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="row">
+        <label>練習する文字
+          <select id="set">
+            <option value="all" selected>あ〜ん（46文字）</option>
+            <option value="a">あ行</option>
+            <option value="ka">か行</option>
+            <option value="sa">さ行</option>
+            <option value="ta">た行</option>
+            <option value="na">な行</option>
+            <option value="ha">は行</option>
+            <option value="ma">ま行</option>
+            <option value="ya">や行</option>
+            <option value="ra">ら行</option>
+            <option value="wa">わ行・ん</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="small">
+        iPadでは最初に「スタート」を押すと音声が使えるようになります。
+        音が出ない場合は消音設定・音量を確認してください。
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const sets = {
+  all: [..."あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん"],
+  a: [..."あいうえお"],
+  ka:[..."かきくけこ"],
+  sa:[..."さしすせそ"],
+  ta:[..."たちつてと"],
+  na:[..."なにぬねの"],
+  ha:[..."はひふへほ"],
+  ma:[..."まみむめも"],
+  ya:[..."やゆよ"],
+  ra:[..."らりるれろ"],
+  wa:[..."わをん"]
+};
+
+let running = false;
+let index = 0;
+let timerSpeak = null;
+let timerNext = null;
+let current = "あ";
+let lastRandom = "";
+
+const charEl = document.getElementById("char");
+const statusEl = document.getElementById("status");
+const modeEl = document.getElementById("mode");
+const delayEl = document.getElementById("delay");
+const autoEl = document.getElementById("auto");
+const gapEl = document.getElementById("gap");
+const setEl = document.getElementById("set");
+
+function cancelTimers(){
+  clearTimeout(timerSpeak);
+  clearTimeout(timerNext);
+  timerSpeak = null;
+  timerNext = null;
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
+}
+
+function pickChar(){
+  const arr = sets[setEl.value];
+  if (modeEl.value === "order"){
+    if (index >= arr.length) index = 0;
+    current = arr[index++];
+  } else {
+    if (arr.length === 1){
+      current = arr[0];
+    } else {
+      let c;
+      do {
+        c = arr[Math.floor(Math.random()*arr.length)];
+      } while(c === lastRandom);
+      current = c;
+      lastRandom = c;
+    }
+  }
+  charEl.textContent = current;
+  statusEl.textContent = "読んでみましょう";
+}
+
+function japaneseVoice(){
+  const voices = speechSynthesis.getVoices();
+  return voices.find(v => v.lang && v.lang.toLowerCase().startsWith("ja")) || null;
+}
+
+function speakCurrent(callback){
+  if (!("speechSynthesis" in window)){
+    statusEl.textContent = "この端末では音声読み上げを使えません";
+    return;
+  }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(current);
+  u.lang = "ja-JP";
+  u.rate = 0.75;
+  u.pitch = 1.0;
+  const v = japaneseVoice();
+  if (v) u.voice = v;
+  u.onstart = () => statusEl.textContent = "こたえ";
+  u.onend = () => {
+    statusEl.textContent = "「" + current + "」";
+    if (callback) callback();
+  };
+  speechSynthesis.speak(u);
+}
+
+function showAndSchedule(){
+  cancelTimers();
+  pickChar();
+  const delay = Number(delayEl.value);
+  timerSpeak = setTimeout(() => {
+    speakCurrent(() => {
+      if (running && autoEl.checked){
+        timerNext = setTimeout(showAndSchedule, Number(gapEl.value));
+      }
+    });
+  }, delay);
+}
+
+document.getElementById("start").addEventListener("click", () => {
+  running = true;
+  // iOS Safariで音声利用をユーザー操作から開始させるための短い無音相当の起動
+  if ("speechSynthesis" in window){
+    const warm = new SpeechSynthesisUtterance("");
+    warm.lang = "ja-JP";
+    speechSynthesis.speak(warm);
+  }
+  showAndSchedule();
+});
+
+document.getElementById("stop").addEventListener("click", () => {
+  running = false;
+  cancelTimers();
+  statusEl.textContent = "停止中";
+});
+
+document.getElementById("next").addEventListener("click", () => {
+  cancelTimers();
+  pickChar();
+  if (running){
+    timerSpeak = setTimeout(() => {
+      speakCurrent(() => {
+        if (running && autoEl.checked){
+          timerNext = setTimeout(showAndSchedule, Number(gapEl.value));
+        }
+      });
+    }, Number(delayEl.value));
+  }
+});
+
+document.getElementById("speak").addEventListener("click", () => {
+  cancelTimers();
+  speakCurrent();
+});
+
+setEl.addEventListener("change", () => {
+  index = 0;
+  lastRandom = "";
+  running = false;
+  cancelTimers();
+  const arr = sets[setEl.value];
+  current = arr[0];
+  charEl.textContent = current;
+  statusEl.textContent = "「スタート」を押してください";
+});
+
+modeEl.addEventListener("change", () => {
+  index = 0;
+  lastRandom = "";
+});
+
+if ("speechSynthesis" in window){
+  speechSynthesis.getVoices();
+}
+</script>
+</body>
+</html>
